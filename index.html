@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            font-family: sans-serif;
+            margin: 1rem;
+        }
+
+        .container {
+            max-width: 300px;
+            margin: 0 auto;
+            border: 1px solid #ddd;
+            padding: 1rem;
+            border-radius: 5px;
+        }
+
+        .section {
+            margin-bottom: 1rem;
+        }
+
+        .field-row {
+            display: grid;
+            grid-template-columns: auto 120px;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        label {
+            margin: 0;
+        }
+
+        input[type="number"] {
+            box-sizing: border-box;
+            width: 100%;
+            padding: 0.3rem;
+            text-align: right;
+        }
+
+        .calculated {
+            background: #f0f0f0;
+        }
+
+        .checkbox-group label {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.9rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .checkbox-group input[type="checkbox"] {
+            transform: scale(1.2);
+        }
+
+        h2 {
+            font-size: 1.1rem;
+            margin-bottom: 0.5rem;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h2>Weight-Based Insulin Calculator</h2>
+        <div class="section">
+            <div class="field-row">
+                <label>Weight</label>
+                <input type="number" id="weight" placeholder="e.g. 80" />
+            </div>
+            <div class="field-row">
+                <label>Units</label>
+                <select id="weight-unit">
+                    <option value="kg">kg</option>
+                    <option value="lb">lb</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="section checkbox-group">
+            <h2>Factors That Increase Dose (+0.1 u/kg each)</h2>
+            <label><input type="checkbox" class="factor-increase"> DKA or HHS on admission</label>
+            <label><input type="checkbox" class="factor-increase"> A1C > 10%</label>
+            <label><input type="checkbox" class="factor-increase"> High dose glucocorticoids</label>
+        </div>
+
+        <div class="section checkbox-group">
+            <h2>Factors That Decrease Dose (-0.1 u/kg each)</h2>
+            <label><input type="checkbox" class="factor-decrease"> Age > 70</label>
+            <label><input type="checkbox" class="factor-decrease"> AKI/renal insufficiency</label>
+            <label><input type="checkbox" class="factor-decrease"> Pancreatic insufficiency (including T1D)</label>
+            <label><input type="checkbox" class="factor-decrease"> Advanced cirrhosis</label>
+            <label><input type="checkbox" class="factor-decrease"> Unexplained hypoglycemia</label>
+        </div>
+
+        <div class="section">
+            <!-- Display the ratio used for the TDD calculation -->
+            <div class="field-row">
+                <label>Insulin Sensitivity Factor (ISF)</label>
+                <input type="text" id="isf" class="calculated" readonly />
+            </div>
+            <div class="field-row">
+                <label>Total Daily Dose (TDD)</label>
+                <input type="text" id="tdd" class="calculated" readonly />
+            </div>
+            <div class="field-row">
+                <label>Basal Dose (1/2 TDD)</label>
+                <input type="text" id="basal-dose" class="calculated" readonly />
+            </div>
+            <div class="field-row">
+                <label>Mealtime Dose (TDD/6)</label>
+                <input type="text" id="mealtime-dose" class="calculated" readonly />
+            </div>
+            <div class="field-row">
+                <label>Correction Ratio (1500/TDD)</label>
+                <input type="text" id="correction-ratio" class="calculated" readonly />
+            </div>
+            <!-- Button to create a summary that can be pasted -->
+            <button id="copy-button">Copy Note to Clipboard</button>
+
+        </div>
+    </div>
+
+    <script>
+        const weightEl = document.getElementById('weight');
+        const weightUnitEl = document.getElementById('weight-unit');
+        const isfEl = document.getElementById('isf');
+        const tddEl = document.getElementById('tdd');
+        const basalDoseEl = document.getElementById('basal-dose');
+        const mealtimeDoseEl = document.getElementById('mealtime-dose');
+        const correctionRatioEl = document.getElementById('correction-ratio');
+
+        const increaseFactors = document.querySelectorAll('.factor-increase');
+        const decreaseFactors = document.querySelectorAll('.factor-decrease');
+
+        function calculate() {
+            let weight = parseFloat(weightEl.value);
+            if (isNaN(weight) || weight <= 0) {
+                clearOutputs();
+                return;
+            }
+
+            // Convert lb to kg if needed
+            if (weightUnitEl.value === 'lb') {
+                weight = weight / 2.2; // approx conversion
+            }
+
+            // Start at 0.5 u/kg
+            let factor = 0.5;
+
+            // Add 0.1 for each increase factor checked
+            increaseFactors.forEach(chk => {
+                if (chk.checked) factor += 0.1;
+            });
+
+            // Subtract 0.1 for each decrease factor checked
+            decreaseFactors.forEach(chk => {
+                if (chk.checked) factor -= 0.1;
+            });
+
+            if (factor < 0) factor = 0; // Avoid negative factor
+
+            const TDD = weight * factor;
+            if (isNaN(TDD) || TDD <= 0) {
+                clearOutputs();
+                return;
+            }
+
+            const basal = TDD / 2;
+            const mealtime = TDD / 6; // since half is basal, half is for meals = 3 meals = TDD/6 per meal
+            const correction = 1500 / TDD;
+
+            // update the insulin sensitivy factor
+            document.getElementById('isf').value = factor.toFixed(1);
+
+            tddEl.value = TDD.toFixed(1);
+            basalDoseEl.value = basal.toFixed(1);
+            mealtimeDoseEl.value = mealtime.toFixed(1);
+            correctionRatioEl.value = correction.toFixed(0);
+        }
+
+        function clearOutputs() {
+            tddEl.value = '';
+            basalDoseEl.value = '';
+            mealtimeDoseEl.value = '';
+            correctionRatioEl.value = '';
+        }
+
+        [weightEl, weightUnitEl, ...increaseFactors, ...decreaseFactors].forEach(el => {
+            el.addEventListener('input', calculate);
+        });
+
+        // Initialize
+        calculate();
+
+        document.getElementById('copy-button').addEventListener('click', () => {
+            const TDD = tddEl.value;
+            const basal = basalDoseEl.value;
+            const meal = mealtimeDoseEl.value;
+            const correction = correctionRatioEl.value;
+            const isf = isfEl.value;
+
+            // Original calculation
+            const calculatedCorrection = parseFloat(correctionRatioEl.value);
+            // This should be 1500/TDD from your calculation.
+
+            // Define the standard correction factors
+            const standardFactors = [10, 12.5, 25, 30, 40, 50, 75, 100];
+
+            // Find the “rounded up” factor
+            let recommended = standardFactors.find(f => f >= calculatedCorrection);
+            if (!recommended) {
+                // If the calculated factor is larger than any standard factor,
+                // just use the largest one.
+                recommended = standardFactors[standardFactors.length - 1];
+            }
+
+            // You can also loop through the checkboxes to build a phrase like 
+            // "adjusting for [AKI, age>60, etc.]" if desired.
+            const increaseFactorsChecked = Array.from(increaseFactors)
+                .filter(chk => chk.checked)
+                .map(chk => chk.parentNode.textContent.trim());
+
+            const decreaseFactorsChecked = Array.from(decreaseFactors)
+                .filter(chk => chk.checked)
+                .map(chk => chk.parentNode.textContent.trim());
+
+            let adjustments = [];
+            if (increaseFactorsChecked.length > 0) {
+                adjustments.push('increasing factors: ' + increaseFactorsChecked.join(', '));
+            }
+            if (decreaseFactorsChecked.length > 0) {
+                adjustments.push('decreasing factors: ' + decreaseFactorsChecked.join(', '));
+            }
+
+            const adjustmentPhrase = adjustments.length > 0 ?
+                ` (0.5 u/kg, adjusting for ${adjustments.join(' and ')})` : '';
+
+            const noteText = `Weight-based insulin doses were calculated at ${isf} units/kg/day${adjustmentPhrase}. Recommend TDD of ${TDD} units, half as basal (${basal} units), and half as prandial (${meal} units per meal). Calculated correction factor is 1 unit per ${Math.round(calculatedCorrection)} mg/dL (recommend using 1:${recommended}).`
+
+            navigator.clipboard.writeText(noteText)
+                .then(() => {
+                    console.log('Copied to clipboard: ', noteText);
+                })
+                .catch(err => {
+                    console.error('Error copying text: ', err);
+                });
+        });
+
+    </script>
+</body>
+
+</html>
